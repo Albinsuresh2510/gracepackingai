@@ -1,29 +1,34 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-export const extractBillDetails = async (base64Image: string): Promise<{ customerName: string; address: string; invoiceNo: string; billDate: string }> => {
-  if (!process.env.API_KEY) {
-    console.warn("Gemini API Key is missing. Returning empty details.");
-    return { customerName: '', address: '', invoiceNo: '', billDate: '' };
+const getKey = () =>
+  process.env.API_KEY || process.env.GEMINI_API_KEY || "";
+
+export const extractBillDetails = async (base64Image: string) => {
+  const apiKey = getKey();
+  if (!apiKey) {
+    return { customerName: "", address: "", invoiceNo: "", billDate: "" };
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    // Extract base64 data if it includes the prefix (e.g., data:image/jpeg;base64,...)
-    const cleanBase64 = base64Image.split(',')[1] || base64Image;
+    const ai = new GoogleGenAI({ apiKey });
+    const cleanBase64 = base64Image.split(",")[1] || base64Image;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: "gemini-2.5-flash",
       contents: {
         parts: [
           {
             inlineData: {
-              mimeType: 'image/jpeg',
+              mimeType: "image/jpeg",
               data: cleanBase64,
             },
           },
           {
-            text: "Analyze this bill image. Extract the Shop Name (or Customer Name), Full Address (City/Area), Invoice Number, and Bill Date. Return date in YYYY-MM-DD format. For 'customerName', prioritize the Shop/Business Name over a person's name if both are present. If a field is not found, return an empty string.",
+            text: `
+Extract shop/customer name, full address, invoice number, and bill date.
+Return date as YYYY-MM-DD.
+If any value missing return empty string.
+`,
           },
         ],
       },
@@ -43,37 +48,36 @@ export const extractBillDetails = async (base64Image: string): Promise<{ custome
 
     let text = response.text;
     if (text) {
-      // Remove markdown code blocks if present to prevent JSON.parse errors
-      text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      text = text.replace(/^```json/, "").replace(/```$/, "");
       return JSON.parse(text);
     }
-    throw new Error("No text returned from Gemini");
-  } catch (error) {
-    console.error("Gemini Extraction Error:", error);
-    // Fallback to manual entry if AI fails
-    return { customerName: '', address: '', invoiceNo: '', billDate: '' };
+
+    throw new Error("missing output");
+  } catch (err) {
+    console.error("gemini error", err);
+    return { customerName: "", address: "", invoiceNo: "", billDate: "" };
   }
 };
 
-export const sendGeminiChat = async (history: { role: string; parts: { text: string }[] }[], newMessage: string, context: string): Promise<string> => {
-    if (!process.env.API_KEY) return "I need an API Key to chat! (Check metadata.json setup)";
-    
-    try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const chat = ai.chats.create({
-            model: 'gemini-2.5-flash',
-            config: {
-                systemInstruction: `You are Grace, a helpful packing assistant. 
-                Current Context: ${context}
-                Keep answers short, friendly, and focused on logistics/packing.`,
-            },
-            history: history
-        });
+export const sendGeminiChat = async (history, newMessage, context) => {
+  const apiKey = getKey();
+  if (!apiKey) return "Missing API Key.";
 
-        const result = await chat.sendMessage({ message: newMessage });
-        return result.text || "I didn't catch that.";
-    } catch (e: any) {
-        console.error("Chat Error", e);
-        return "Sorry, I'm having trouble connecting right now.";
-    }
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+
+    const chat = ai.chats.create({
+      model: "gemini-2.5-flash",
+      config: {
+        systemInstruction: `You are Grace AI. Keep replies short and helpful. Context: ${context}`,
+      },
+      history,
+    });
+
+    const result = await chat.sendMessage({ message: newMessage });
+    return result.text || "no reply";
+  } catch (e) {
+    console.error(e);
+    return "chat offline rn";
+  }
 };
