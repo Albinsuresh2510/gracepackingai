@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { BillData, PackingStatus } from './types';
 import { extractBillDetails } from './services/geminiService';
@@ -8,8 +9,9 @@ import {
 import BillCard from './components/BillCard';
 import CameraCapture from './components/CameraCapture';
 import DailyPlanner from './components/DailyPlanner';
+import LoginScreen from './components/LoginScreen';
 import * as XLSX from 'xlsx';
-import { Camera, FileSpreadsheet, Plus, Calendar, Loader2, Clock, Archive, ListChecks, X, Trash2, CheckSquare, Palette, RotateCcw, ChevronLeft, ChevronRight, Image as ImageIcon, AlertOctagon, Save, Ban, AlertTriangle, Cloud, CloudOff, RefreshCw, Database } from 'lucide-react';
+import { Camera, FileSpreadsheet, Plus, Calendar, Loader2, Clock, Archive, ListChecks, X, Trash2, CheckSquare, Palette, RotateCcw, ChevronLeft, ChevronRight, Image as ImageIcon, AlertOctagon, Save, Ban, AlertTriangle, Cloud, CloudOff, RefreshCw, Database, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Robust ID generation
@@ -30,6 +32,10 @@ const formatDateForDisplay = (dateStr: string) => {
 };
 
 const App: React.FC = () => {
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // App State
   const [allBills, setAllBills] = useState<BillData[]>([]);
   const [currentDate, setCurrentDate] = useState<string>(getTodayDateString());
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -67,9 +73,15 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  // Initial Load
+  // Initial Load & Auth Check
   useEffect(() => {
-    // 1. Load Local
+    // Check Session (using specific key for this app to avoid collisions)
+    const session = localStorage.getItem('grace_session');
+    if (session === 'loggedin') {
+        setIsAuthenticated(true);
+    }
+
+    // 1. Load Local Bills
     setAllBills(getStoredBills());
 
     // 2. Check Cloud Config
@@ -80,6 +92,17 @@ const App: React.FC = () => {
         handleSync(); // Auto sync on load
     }
   }, []);
+
+  const handleLoginSuccess = () => {
+      setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+      if (window.confirm("Are you sure you want to logout?")) {
+          localStorage.removeItem('grace_session');
+          setIsAuthenticated(false);
+      }
+  };
 
   const handleSync = async () => {
       if (!isSupabaseConnected()) return;
@@ -371,6 +394,11 @@ const App: React.FC = () => {
       handleAddBill(file);
   };
 
+  // --- RENDER LOGIN SCREEN IF NOT AUTHENTICATED ---
+  if (!isAuthenticated) {
+      return <LoginScreen onLogin={handleLoginSuccess} />;
+  }
+
   return (
     <div className="min-h-screen pb-32 relative bg-[#f8f9fa]">
       
@@ -429,6 +457,9 @@ const App: React.FC = () => {
              </button>
              <button onClick={handleClearAllData} className="p-2.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl transition-colors" title="Clear All Data">
                 <Trash2 size={20} />
+             </button>
+             <button onClick={handleLogout} className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-xl transition-colors" title="Logout">
+                <LogOut size={20} />
              </button>
           </div>
         </div>
